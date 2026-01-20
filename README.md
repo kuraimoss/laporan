@@ -1,4 +1,5 @@
-# Laporan UAS Proyek Deep Learning — Plate Detection System (YOLOv8 + PaddleOCR)
+# Laporan UAS Proyek Deep Learning
+# Sistem Deteksi dan Pembacaan Plat Nomor Kendaraan (YOLOv8 + PaddleOCR)
 
 ## 1. Pendahuluan
 
@@ -8,16 +9,16 @@ Dokumen ini adalah **makalah rangkuman UAS Proyek Deep Learning** yang merangkum
 
 ## 2. Deskripsi Proyek UAS Deep Learning
 
-Proyek UAS ini berfokus pada **pengembangan dan analisis sistem Deep Learning** untuk kebutuhan nyata: **deteksi dan pembacaan plat nomor kendaraan** dari foto, kemudian (opsional) melakukan **lookup wilayah Samsat** berdasarkan plat.
+Proyek UAS ini berfokus pada **pengembangan dan analisis sistem Deep Learning** untuk kebutuhan nyata: **deteksi dan pembacaan plat nomor kendaraan** dari foto. Output sistem adalah JSON berisi teks plat (mentah dan terformat) serta (opsional) **lookup wilayah Samsat** berdasarkan plat.
 
 Ruang lingkup UAS yang dipenuhi:
 
 - **Fokus UAS pada Deep Learning**: model utama adalah **object detection** (YOLOv8) dan OCR berbasis DL (PaddleOCR) untuk membaca teks pada plat.
-- **Proyek berdampak nyata**: output sistem dapat dipakai untuk otomasi validasi/identifikasi plat pada konteks monitoring kendaraan.
+- **Proyek berdampak nyata**: dapat digunakan untuk otomasi validasi/identifikasi plat pada monitoring kendaraan.
 - **Keterkaitan proyek–paper–deployment**:
-  - Proyek mengadopsi metode yang sesuai paper ALPR/ANPR modern (deteksi → crop → OCR).
-  - Hasil implementasi disajikan sebagai aplikasi backend (Go) yang memanggil worker inferensi (Python).
-  - Disediakan langkah deployment (VM + reverse proxy Nginx) agar sistem bisa didemokan sebagai layanan.
+  - Proyek mengadopsi metode ALPR/ANPR modern (deteksi → crop → OCR).
+  - Implementasi disajikan sebagai backend API (Go) yang memanggil worker inferensi (Python).
+  - Disediakan langkah deployment (VM + reverse proxy Nginx + service) untuk demo layanan.
 
 ---
 
@@ -25,10 +26,12 @@ Ruang lingkup UAS yang dipenuhi:
 
 ### 3.1 Model Deep Learning yang digunakan
 
-- **YOLOv8 (Ultralytics)**: CNN-based object detector (single-stage) untuk **mendeteksi bounding box plat**.
+- **YOLOv8 (Ultralytics)**: single-stage CNN object detector untuk **mendeteksi bounding box plat**.
   - Fine-tuning dari model dasar `yolov8n.pt` menjadi model custom `best.pt`.
-- **PaddleOCR (PaddlePaddle)**: OCR untuk **mengenali karakter plat** dari hasil crop.
-  - OCR dijalankan dengan `use_angle_cls=True` dan `use_gpu=False` (stabil untuk runtime worker).
+- **PaddleOCR (PaddlePaddle)**: OCR berbasis DL untuk **mengenali karakter plat** dari hasil crop.
+  - Konfigurasi runtime: `use_angle_cls=True`, `use_gpu=False`.
+
+Catatan: pipeline ini merupakan **kombinasi model deteksi + OCR** (hybrid pipeline), bukan RNN murni (LSTM/GRU) atau Transformer murni. OCR dilakukan oleh model PaddleOCR bawaan library.
 
 ### 3.2 Kompleksitas masalah
 
@@ -43,10 +46,15 @@ Masalah termasuk kompleks karena melibatkan:
 **Dataset**: Roboflow Universe — *Plat nomor kendaraan Indonesia*  
 Link: `https://universe.roboflow.com/kuraimos/plat-nomor-kendaraan-indonesia-dowl5`
 
-Informasi penting dataset:
+Informasi dataset:
 
 - Total **1409 images**
 - Anotasi: **YOLOv8 format**
+- Kelas: **1 kelas** (`plat_nomor`)
+- Split:
+  - `train`: `Plat-nomor-kendaraan-Indonesia-1/train/images`
+  - `val`: `Plat-nomor-kendaraan-Indonesia-1/valid/images`
+  - `test`: `Plat-nomor-kendaraan-Indonesia-1/test/images`
 - Preprocessing Roboflow:
   - auto-orient (EXIF stripped)
   - resize ke **640×640 (stretch)**
@@ -56,7 +64,7 @@ Informasi penting dataset:
   - Gaussian blur (0–1 px)
   - salt & pepper noise (0.1% pixel)
 
-**Preprocessing sebelum OCR (runtime inference)**:
+**Preprocessing sebelum OCR (runtime inference, sesuai `backend-python/detect.py` dan `paddleOCR.py`)**:
 
 1. Crop area plat dari hasil deteksi YOLO + padding agar karakter tepi tidak terpotong.
 2. Resize crop (pembesaran) untuk membantu OCR.
@@ -74,12 +82,17 @@ Evaluasi deteksi plat dilakukan memakai metrik object detection dari Ultralytics
 - mAP@0.50 (B): **0.9947**
 - mAP@0.50:0.95 (B): **0.9341**
 
-Catatan: metrik diambil dari hasil training YOLOv8 pada 30 epoch (`runs/detect/train/results.csv`) dengan konfigurasi umum:
+Catatan:
 
-- Model base: `yolov8n.pt`
-- Epoch: 30
-- Image size: 640
-- Batch: 8
+- Metrik diambil dari hasil training YOLOv8 pada 30 epoch (`runs/detect/train/results.csv`).
+- Konfigurasi training utama:
+  - Model base: `yolov8n.pt`
+  - Epoch: 30
+  - Image size: 640
+  - Batch: 8
+  - Device: GPU jika tersedia (`cuda: True` pada notebook).
+- Log inferensi contoh (dari notebook):
+  - `preprocess 4.6ms` + `inference 12.7ms` + `postprocess 1.5ms` pada sample image.
 
 ---
 
@@ -87,24 +100,23 @@ Catatan: metrik diambil dari hasil training YOLOv8 pada 30 epoch (`runs/detect/t
 
 ### 4.1 Deskripsi Paper
 
-Paper yang dibuat untuk UAS:
+Paper untuk UAS:
 
 - Ditulis dalam **Bahasa Inggris**
 - Format **Word (`.docx`)**
-- Mengikuti standar jurnal/konferensi (contoh template):
+- Mengikuti standar jurnal/konferensi
   - RESTI: `https://jurnal.iaii.or.id/index.php/RESTI`
   - IJAIDM: `https://ejournal.uin-suska.ac.id/index.php/IJAIDM/index`
-  - ICIC (sering menggunakan template IEEE): `https://icic-aptikom.org/2025/`
+  - ICIC (IEEE template): `https://icic-aptikom.org/2025/`
 
-Paper acuan yang sesuai **metode yang benar-benar dipakai di proyek (YOLOv8 + PaddleOCR)**:
+**Paper acuan yang sesuai metode proyek (YOLOv8 + PaddleOCR)**:
 
 - *Design of Vehicle License Plate Detection System Using YOLOv8 and PaddleOCR* — DOI `10.1109/icera66156.2025.11087294`
 - *NLPDRS: A YOLOv8 and PaddleOCR-Based End-to-End Framework for Nigerian License Plate Detection and Recognition System* — DOI `10.26438/ijsrcse.v13i5.748`
+- *License Plate Detection using YOLO v8 and Performance Evaluation of EasyOCR, PaddleOCR and Tesseract* — DOI `10.1109/icccnt61001.2024.10725878`
 - (Pendukung deteksi) *You Only Look Once: Unified, Real-Time Object Detection* — DOI `10.1109/cvpr.2016.91`
 
 ### 4.2 Struktur Paper
-
-Struktur paper yang digunakan:
 
 - Introduction
 - Related Work
@@ -132,15 +144,15 @@ Bagian ini memetakan kriteria penilaian teknis:
   - OCR: crop + resize + grayscale + blur + Otsu threshold.
 - **Arsitektur model**:
   - Deteksi: YOLOv8n fine-tuned (Ultralytics).
-  - OCR: PaddleOCR (dengan angle classifier).
+  - OCR: PaddleOCR (angle classifier aktif).
 - **Minimal 2 fitur unik yang ditambahkan**:
-  1. **Normalisasi plat Indonesia** dari hasil OCR (heuristik perbaikan karakter + regex pola plat) sehingga output konsisten (contoh: `BK4272AMQ`).
+  1. **Normalisasi plat Indonesia** dari hasil OCR (heuristik perbaikan karakter + regex pola plat) sehingga output konsisten (contoh: `BK 4272 AMQ`).
   2. **Lookup wilayah Samsat** berdasarkan plat (mengambil referensi dari `samsat.info`) sebagai nilai tambah berbasis kebutuhan nyata.
 - **Hasil evaluasi (akurasi/error)**:
   - Deteksi (YOLO): precision/recall/mAP tercantum pada Bagian 3.4.
-  - OCR: dievaluasi secara kualitatif pada sampel uji (disarankan menambah pengukuran CER/WER pada dataset test untuk laporan final).
+  - OCR: evaluasi bersifat kualitatif pada sampel uji; disarankan menambah metrik CER/WER pada test set untuk pelaporan final.
 - **Teknologi dan deployment**:
-  - Backend API: Go (serve docs + endpoint upload).
+  - Backend API: Go (docs + endpoint upload).
   - Worker inferensi: Python (YOLO + OCR) dipanggil oleh Go via `os/exec`.
   - Deployment: VM + Nginx reverse proxy + systemd service (opsional).
 
@@ -158,12 +170,26 @@ Link Laporan Teknis (PDF):
 
 ### 6.2 Struktur Source Code
 
-- **Preprocessing**: dilakukan saat inference (crop, resize, threshold) di `backend-python/detect.py`.
-- **Model Deep Learning**:
-  - YOLO weights: `backend-python/model/best.pt`
-  - OCR: PaddleOCR (runtime)
-- **Training & Evaluation**: notebook/training log tersimpan pada folder training YOLO (mis. `runs/detect/train/`).
-- **Dokumentasi**: `README.md` (root), `backend-go/README.md`, `backend-python/README.md`
+**Folder Deep Learning (training + eksperimen):**
+
+- `E:\RPL\Semester 7\ML\DeepL\UAS_MachineLearning.ipynb`  
+  Notebook untuk setup, training, validasi, dan inferensi YOLOv8.
+- `E:\RPL\Semester 7\ML\DeepL\paddleOCR.py`  
+  Skrip inferensi YOLOv8 + preprocessing + PaddleOCR (standalone).
+- `E:\RPL\Semester 7\ML\DeepL\Plat-nomor-kendaraan-Indonesia-1\`  
+  Dataset lengkap (train/valid/test + labels).
+- `E:\RPL\Semester 7\ML\DeepL\runs\detect\train\`  
+  Hasil training YOLOv8 (weights, metrics, grafik).
+
+**Folder UAS (backend aplikasi):**
+
+- `E:\RPL\Semester 7\ML\UAS\backend-python\detect.py`  
+  Worker inferensi: YOLOv8 + PaddleOCR + preprocessing + output JSON.
+- `E:\RPL\Semester 7\ML\UAS\backend-python\utils\ocr_cleaner.py`  
+  Normalisasi teks OCR untuk format plat Indonesia.
+- `E:\RPL\Semester 7\ML\UAS\backend-go\`  
+  REST API: upload → panggil Python → return JSON + (opsional) Samsat lookup.
+- Dokumentasi: `E:\RPL\Semester 7\ML\UAS\README.md`, `backend-go/README.md`, `backend-python/README.md`
 
 Link Source Code:
 
@@ -179,18 +205,55 @@ Link Source Code:
 
 ### 7.2 Arsitektur Sistem
 
-- **Backend**: Go (`backend-go/`) menyediakan REST API + halaman docs.
-- **Worker inferensi**: Python (`backend-python/`) menjalankan YOLOv8 + PaddleOCR dan print hasil JSON ke stdout.
-- **Model deployment**: model disimpan lokal pada server (`backend-python/model/best.pt`) dan dipanggil per request.
+**Alur utama:**
+
+1. Client upload gambar ke `POST /detect` (multipart/form-data).
+2. Go server menyimpan file sementara.
+3. Go memanggil Python worker (`detect.py`) dengan path file.
+4. Python melakukan YOLO → crop → preprocess → OCR → normalisasi.
+5. Hasil JSON dikembalikan ke Go.
+6. (Opsional) Go melakukan lookup Samsat via `samsat.info` (Firestore).
+7. Response final dikirim ke client.
+
+**Komponen:**
+
+- **Backend Go**:
+  - Router + middleware (logging, request id, recovery).
+  - Endpoint: `GET /healthz`, `POST /detect`, `GET /openapi.json`, docs UI (`/`).
+- **Worker Python**:
+  - YOLOv8 custom (`best.pt`).
+  - PaddleOCR (CPU).
+  - Output JSON terstruktur.
+- **Samsat lookup (opsional)**:
+  - Scraper via Firestore API (`samsat.info`).
 
 ### 7.3 Konfigurasi Environment
 
-Library utama (ringkas):
+**Python dependencies** (ringkas, lihat `backend-python/requirements.txt`):
 
-- Python: `ultralytics`, `opencv-python`, `paddlepaddle`, `paddleocr`, `numpy`
-- Go: Go >= 1.22 (server API)
+- `ultralytics`
+- `opencv-python`
+- `paddlepaddle`
+- `paddleocr`
+- `numpy`
+- `Pillow`
 
-Hardware (diisi sesuai perangkat yang dipakai):
+**Go requirements:**
+
+- Go >= 1.22
+
+**Environment variables utama (Go):**
+
+- `YOLO_PY_SCRIPT` (wajib): path ke `backend-python/detect.py`
+- `PYTHON_BIN` (default `python`)
+- `ADDR` (default `:8080`)
+- `YOLO_TIMEOUT_SECONDS` (default `120`)
+- `SCRAPE_TIMEOUT_SECONDS` (default `15`)
+- `MAX_UPLOAD_MB` (default `15`)
+- `MIN_PLATE_CONFIDENCE` (default `0`)
+- `SAMSAT_FIRESTORE_API_KEY`, `SAMSAT_PAGE_URL`, `SAMSAT_FIRESTORE_BASE_URL`
+
+**Hardware (isi sesuai perangkat uji):**
 
 - CPU: (isi)
 - GPU (opsional): (isi)
@@ -198,10 +261,52 @@ Hardware (diisi sesuai perangkat yang dipakai):
 
 ### 7.4 Analisis Performa
 
-- **Waktu inferensi**:
-  - Dipengaruhi oleh ukuran gambar, device (CPU/GPU), dan latensi load model (cache model pada proses worker membantu).
-  - (isi hasil pengukuran: ms per request pada perangkat uji)
-- **Resource usage**:
-  - YOLO inference dan OCR menambah penggunaan CPU/RAM; jika memakai GPU untuk YOLO, VRAM akan terpakai.
-  - (isi observasi penggunaan resource saat demo)
+**Waktu inferensi:**
+
+- Contoh log YOLO pada notebook: ~**12.7 ms** inference per image (di GPU).
+- Latensi end-to-end dipengaruhi oleh:
+  - ukuran gambar,
+  - proses OCR (CPU),
+  - overhead pemanggilan Python dari Go.
+
+**Resource usage:**
+
+- YOLO inference menambah penggunaan GPU/CPU.
+- OCR menambah penggunaan CPU/RAM.
+- Proses Python di-cache dalam runtime worker (model tidak di-load ulang jika proses tetap hidup).
+
+---
+
+## Lampiran: Ringkasan Implementasi (Detail Teknis)
+
+### A. Pipeline YOLOv8 Training (Notebook)
+
+- Setup dataset lokal (`data.yaml`).
+- Training: `YOLO('yolov8n.pt')`, `epochs=30`, `imgsz=640`, `batch=8`, `device=GPU/CPU`.
+- Validasi: `model.val(data=DATA_YAML)`.
+- Hasil weights: `runs/detect/train/weights/best.pt`.
+
+### B. Pipeline Inference + OCR (Python)
+
+Langkah utama dalam `backend-python/detect.py`:
+
+1. Load YOLO model (`best.pt`).
+2. Detect plat dengan confidence `0.25`.
+3. Crop plat + padding.
+4. Resize crop (pembesaran).
+5. Grayscale → blur → Otsu threshold.
+6. Jalankan PaddleOCR pada:
+   - citra crop asli
+   - citra threshold
+7. Pilih hasil OCR terbaik.
+8. Normalisasi teks plat (regex + heuristik karakter).
+9. Output JSON: `plate_raw`, `plate_cleaned`, `confidence`.
+
+### C. Normalisasi Teks Plat
+
+Heuristik perbaikan OCR (`ocr_cleaner.py`):
+
+- `O→0`, `I/L→1`, `Z→2`, `S→5`, `B→8`, `G→6`
+- Regex pola plat Indonesia: `([A-Z]{1,2})(\\d{1,4})([A-Z]{1,3})`
+- Output final dibatasi maksimal 9 karakter jika tidak match pola.
 
