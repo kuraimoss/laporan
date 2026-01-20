@@ -129,7 +129,7 @@ Paper untuk UAS:
 
 Link Paper (Word):
 
-- (isi link di sini) `https://...`
+- Link tidak tersedia pada repositori lokal.
 
 ---
 
@@ -158,7 +158,7 @@ Bagian ini memetakan kriteria penilaian teknis:
 
 Link Laporan Teknis (PDF):
 
-- (isi link di sini) `https://...`
+- Link tidak tersedia pada repositori lokal.
 
 ---
 
@@ -166,7 +166,7 @@ Link Laporan Teknis (PDF):
 
 ### 6.1 Platform Repositori
 
-- GitHub / OneDrive: (pilih salah satu)
+Repositori belum dipublikasikan ke platform eksternal pada saat laporan dibuat.
 
 ### 6.2 Struktur Source Code
 
@@ -193,7 +193,7 @@ Link Laporan Teknis (PDF):
 
 Link Source Code:
 
-- (isi link di sini) `https://...`
+- Link tidak tersedia pada repositori lokal.
 
 ---
 
@@ -253,11 +253,11 @@ Link Source Code:
 - `MIN_PLATE_CONFIDENCE` (default `0`)
 - `SAMSAT_FIRESTORE_API_KEY`, `SAMSAT_PAGE_URL`, `SAMSAT_FIRESTORE_BASE_URL`
 
-**Hardware (isi sesuai perangkat uji):**
+**Hardware (ringkas):**
 
-- CPU: (isi)
-- GPU (opsional): (isi)
-- RAM: (isi)
+- CPU: tidak terdokumentasi pada repositori lokal.
+- GPU: tidak terdokumentasi pada repositori lokal.
+- RAM: tidak terdokumentasi pada repositori lokal.
 
 ### 7.4 Analisis Performa
 
@@ -309,4 +309,3 @@ Heuristik perbaikan OCR (`ocr_cleaner.py`):
 - `O→0`, `I/L→1`, `Z→2`, `S→5`, `B→8`, `G→6`
 - Regex pola plat Indonesia: `([A-Z]{1,2})(\\d{1,4})([A-Z]{1,3})`
 - Output final dibatasi maksimal 9 karakter jika tidak match pola.
-
